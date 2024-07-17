@@ -1,0 +1,10 @@
+[package]
+name = "winpipe"
+version = "0.1.0"
+edition = "2021"
+license-file = "LICENSE"
+
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "io-std", "io-util"] }
