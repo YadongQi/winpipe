@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::io;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
@@ -21,10 +22,14 @@ struct Args {
     /// whether to wait for the pipe be ready
     #[arg(short, long, default_value_t = false)]
     wait: bool,
+
+    /// path of file to redirect
+    #[arg(short, long, value_name="PATH", value_hint = clap::ValueHint::FilePath)]
+    redir: Option<PathBuf>,
 }
 
 #[tokio::main]
-async fn aync_pipe_io(pipe: &str, wait: bool) -> io::Result<()> {
+async fn aync_pipe_io(pipe: &str, wait: bool, redir: Option<PathBuf>) -> io::Result<()> {
     println!("Pipe connecting: {}", pipe);
     let client = loop {
         match named_pipe::ClientOptions::new().open(pipe) {
@@ -60,6 +65,25 @@ async fn aync_pipe_io(pipe: &str, wait: bool) -> io::Result<()> {
     let pipe_to_stdout = async {
         let mut stdout = tokio::io::stdout();
         let mut buf = vec![0; 1024];
+
+        let mut redir_file = match redir {
+            Some(path) => {
+                match tokio::fs::File::options()
+                    .append(true)
+                    .create(true)
+                    .open(path.clone())
+                    .await
+                {
+                    Ok(file) => Some(file),
+                    Err(e) => {
+                        eprintln!("Invalid file to redirect: {:?}, err={}", path, e);
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
+
         loop {
             let n = reader.read(&mut buf).await?;
             if n == 0 {
@@ -67,6 +91,9 @@ async fn aync_pipe_io(pipe: &str, wait: bool) -> io::Result<()> {
             }
             stdout.write_all(&buf[..n]).await?;
             stdout.flush().await?;
+            if let Some(ref mut file) = redir_file {
+                file.write_all(&buf[..n]).await?
+            }
         }
         io::Result::Ok(())
     };
@@ -79,7 +106,7 @@ async fn aync_pipe_io(pipe: &str, wait: bool) -> io::Result<()> {
 fn main() {
     let args = Args::parse();
 
-    match aync_pipe_io(&args.path, args.wait) {
+    match aync_pipe_io(&args.path, args.wait, args.redir) {
         Ok(_) => (),
         Err(e) => eprintln!("Error: {}", e),
     }
