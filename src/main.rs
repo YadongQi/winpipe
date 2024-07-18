@@ -3,6 +3,7 @@
 
 use std::io;
 use std::path::PathBuf;
+use std::process;
 use std::time::Duration;
 
 use clap::Parser;
@@ -98,7 +99,29 @@ async fn aync_pipe_io(pipe: &str, wait: bool, redir: Option<PathBuf>) -> io::Res
         io::Result::Ok(())
     };
 
-    tokio::try_join!(stdin_to_pipe, pipe_to_stdout)?;
+    tokio::select! {
+        r = stdin_to_pipe => {
+            match r {
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!("stdin_to_pipe: Error: {}", e);
+                }
+            }
+        },
+        r = pipe_to_stdout => {
+            match r {
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!("pipe_to_stdout: Error: {}", e);
+                    // From comments of tokio::io::Stdin, for technical reasons, the
+                    // shutdown of the runtime hang until user presses enter.
+                    // So here force to exit whole process to workaround this issue.
+                    // Reference: https://docs.rs/tokio/latest/tokio/io/struct.Stdin.html
+                    process::exit(1);
+                }
+            }
+        }
+    };
 
     Ok(())
 }
