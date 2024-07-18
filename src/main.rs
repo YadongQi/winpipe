@@ -105,6 +105,7 @@ async fn aync_pipe_io(pipe: &str, wait: bool, redir: Option<PathBuf>) -> io::Res
                 Ok(_) => (),
                 Err(e) => {
                     eprintln!("stdin_to_pipe: Error: {}", e);
+                    return Err(e);
                 }
             }
         },
@@ -117,7 +118,7 @@ async fn aync_pipe_io(pipe: &str, wait: bool, redir: Option<PathBuf>) -> io::Res
                     // shutdown of the runtime hang until user presses enter.
                     // So here force to exit whole process to workaround this issue.
                     // Reference: https://docs.rs/tokio/latest/tokio/io/struct.Stdin.html
-                    process::exit(1);
+                    process::exit(e.raw_os_error().unwrap_or(1));
                 }
             }
         }
