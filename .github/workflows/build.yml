@@ -1,0 +1,40 @@
+name: WinPipe Build
+
+on: [push, pull_request]
+
+jobs:
+  build_windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@main
+        with:
+          submodules: 'recursive'
+      - name: Install Dependencies
+        run: |
+          get-command rustc
+          rustc --version
+          cargo --version
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+          echo $Env:PATH
+          rustc --version
+          cargo --version
+          get-command rustc
+      - name: Check fmt
+        run: cargo fmt --check
+      - name: Check clippy
+        run: cargo clippy --all -- -D warnings
+      - name: Build
+        run: |
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+          get-command rustc
+          echo $Env:PATH
+          rustc --version
+          cargo --version
+          cargo build
+
+      - name: Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: winpipe.windows.${{ github.run_id }}.${{ github.sha }}
+          path: |
+            target/debug/
