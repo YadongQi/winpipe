@@ -9,6 +9,8 @@ use std::os::windows::io::RawHandle;
 use std::thread::sleep;
 use std::time;
 
+use log::error;
+
 use windows::core::PCSTR;
 use windows::Win32::Foundation::DuplicateHandle;
 use windows::Win32::Foundation::DUPLICATE_SAME_ACCESS;
@@ -85,7 +87,7 @@ unsafe fn set_named_pipe_handle_state(
     client_mode: Option<*const NAMED_PIPE_MODE>,
 ) -> windows::core::Result<()> {
     if let Err(e) = SetNamedPipeHandleState(pipe_handle, client_mode, None, None) {
-        println!("Failed to set pipe handle state: {:?}", e);
+        error!("Failed to set pipe handle state: {:?}", e);
         return Err(e);
     }
     Ok(())
@@ -97,7 +99,7 @@ unsafe fn wait_named_pipe(name: &str, timeout: u32) -> windows::core::Result<()>
     match WaitNamedPipeA(PCSTR(pipe_name.as_ptr() as *const u8), timeout) {
         Ok(()) => Ok(()),
         Err(e) => {
-            println!("Timeout wait pipe: {} milliseconds! e={}", timeout, e);
+            error!("Timeout wait pipe: {} milliseconds! e={}", timeout, e);
             Err(e)
         }
     }
