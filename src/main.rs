@@ -9,8 +9,15 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
+use log::error;
+use log::info;
+use log::warn;
+
+use logger::setup_logger;
+
 use windows::Win32::Foundation::ERROR_PIPE_NOT_CONNECTED;
 
+pub mod logger;
 pub mod named_pipe;
 
 #[derive(Parser, Debug)]
@@ -40,7 +47,7 @@ fn stdin_to_pipe(pipe: named_pipe::NamedPipe) -> Result<(), std::io::Error> {
                 continue;
             }
             Err(e) => {
-                eprintln!("Failed to read from stdin: {:?}", e);
+                error!("Failed to read from stdin: {:?}", e);
                 break Err(e);
             }
         };
@@ -88,24 +95,26 @@ fn pipe_to_stdout(
 fn main() {
     let args = Args::parse();
 
-    println!("Pipe connecting: {:?}", args.path);
+    let _ = setup_logger(&args.redir);
+
+    info!("Pipe connecting: {:?}", args.path);
     let pipe_stp = {
         match named_pipe::NamedPipe::try_open(&args.path, args.wait) {
             Ok(pipe) => pipe,
             Err(e) => {
-                eprintln!("Failed to open pipe: {:?}", e);
+                error!("Failed to open pipe: {:?}", e);
                 return;
             }
         }
     };
 
-    println!("Pipe connected: {:?}", args.path);
+    info!("Pipe connected: {:?}", args.path);
     let pipe_pts = pipe_stp.clone();
 
     let _th_stdin_to_pipe = std::thread::spawn(move || match stdin_to_pipe(pipe_stp) {
         Ok(_) => {}
         Err(e) => {
-            eprintln!("Error in stdin_to_pipe: {:?}", e);
+            error!("Error in stdin_to_pipe: {:?}", e);
         }
     });
 
@@ -113,10 +122,10 @@ fn main() {
         std::thread::spawn(move || match pipe_to_stdout(pipe_pts, &args.redir) {
             Ok(_) => {}
             Err(e) if e == ERROR_PIPE_NOT_CONNECTED.into() => {
-                eprintln!("Pipe disconnected: {:?}, hresult={}", e.message(), e.code());
+                warn!("Pipe disconnected: {:?}, hresult={}", e.message(), e.code());
             }
             Err(e) => {
-                eprintln!("Error in pipe_to_stdout: {:?}", e);
+                error!("Error in pipe_to_stdout: {:?}", e);
             }
         });
 
