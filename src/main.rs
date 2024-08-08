@@ -15,6 +15,7 @@ use log::warn;
 
 use logger::setup_logger;
 
+use windows::Win32::Foundation::ERROR_OPERATION_ABORTED;
 use windows::Win32::Foundation::ERROR_PIPE_NOT_CONNECTED;
 use windows::Win32::Foundation::STATUS_INTERRUPTED;
 
@@ -51,6 +52,10 @@ fn stdin_to_pipe(
                 thread::sleep(Duration::from_millis(100));
                 continue;
             }
+            Err(e) if e.code() == ERROR_OPERATION_ABORTED.into() => {
+                warn!("Operation aborted!");
+                break Ok(());
+            }
             Err(e) => {
                 error!("Failed to read from stdin: {:?}", e);
                 break Err(e.into());
@@ -80,7 +85,23 @@ fn pipe_to_stdout(
 
     loop {
         let mut buffer: Vec<u8> = Vec::new();
-        pipe.read(&mut buffer)?;
+        match pipe.read(&mut buffer) {
+            Ok(n) => {
+                if n == 0 {
+                    thread::sleep(Duration::from_millis(100));
+                    continue;
+                }
+            }
+            Err(e) if e.code() == ERROR_PIPE_NOT_CONNECTED.into() => {
+                warn!("Pipe disconnected: {:?}, hresult={}", e.message(), e.code());
+                con.cancel_read()?;
+                break Ok(());
+            }
+            Err(e) => {
+                error!("Failed to read from pipe: {:?}", e);
+                break Err(e);
+            }
+        }
 
         con.write(buffer.as_slice())?;
         if let Some(ref mut file) = redir_file {
@@ -137,17 +158,14 @@ fn main() {
         std::thread::spawn(
             move || match pipe_to_stdout(pipe_pts, arc_con_w, &args.redir) {
                 Ok(_) => {}
-                Err(e) if e == ERROR_PIPE_NOT_CONNECTED.into() => {
-                    warn!("Pipe disconnected: {:?}, hresult={}", e.message(), e.code());
-                }
                 Err(e) => {
                     error!("Error in pipe_to_stdout: {:?}", e);
                 }
             },
         );
 
-    th_stdin_to_pipe.join().unwrap();
     th_pipe_to_stdout.join().unwrap();
+    th_stdin_to_pipe.join().unwrap();
 
     match con.restore() {
         Ok(_) => {}
