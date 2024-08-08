@@ -207,7 +207,7 @@ impl NamedPipe {
     }
 
     pub fn write(&self, buffer: &[u8]) -> windows::core::Result<u32> {
-        let mut bytes_written: u32 = 0;
+        let mut bytes_written: u32 = buffer.len() as u32;
         let mut ov = OVERLAPPED::default();
 
         match unsafe {
