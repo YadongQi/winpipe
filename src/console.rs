@@ -24,6 +24,7 @@ use windows::Win32::System::Console::ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 use windows::Win32::System::Console::ENABLE_WINDOW_INPUT;
 use windows::Win32::System::Console::STD_INPUT_HANDLE;
 use windows::Win32::System::Console::STD_OUTPUT_HANDLE;
+use windows::Win32::System::IO::CancelIoEx;
 
 const UNICODE_UTF8_CP_ID: u32 = 65001;
 
@@ -141,5 +142,12 @@ impl Console {
             Err(e) => Err(e),
             Ok(_) => Ok(bytes_read),
         }
+    }
+
+    pub fn cancel_read(&self) -> windows::core::Result<()> {
+        unsafe {
+            let _ = CancelIoEx(self.stdin_handle.0, None);
+        };
+        Ok(())
     }
 }
